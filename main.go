@@ -1,68 +1,39 @@
 package main
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/binary"
-	"encoding/hex"
+	"encoding/json"
 	"fmt"
-	"github.com/cnf/structhash"
-	"github.com/kr/pretty"
 	"log"
+	"net/http"
+
+	"github.com/gorilla/mux"
+	"github.com/kr/pretty"
+	"github.com/satori/go.uuid"
 )
 
-// IntToHex converts an int64 to a byte array
-func IntToHex(num int64) []byte {
-	buff := new(bytes.Buffer)
-	err := binary.Write(buff, binary.BigEndian, num)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	return buff.Bytes()
+// API Context
+type API struct {
+	bc *blockchain
 }
 
-// Creates a SHA-256 hash of a Block
-// :param block: <dict> Block
-// :return: <str>
-func hash(b block) string {
-	hash := structhash.Md5(b, 1)
-	fmt.Println(b, hex.EncodeToString(hash))
-	return hex.EncodeToString(hash)
+// Mine endpoint
+func (api *API) Mine(w http.ResponseWriter, r *http.Request) {
+	fmt.Println(api.bc)
+	json.NewEncoder(w).Encode(api.bc)
 }
 
-// Validates the Proof: Does hash(last_proof, proof) contain 4 leading zeroes?
-// :param last_proof: <int> Previous Proof
-// :param proof: <int> Current Proof
-// :return: <bool> True if correct, False if not.
-func validProof(lastProof int, proof int) bool {
-	guess := string(lastProof) + string(proof)
-	guessHash := sha256.Sum256([]byte(guess))
-	h := hex.EncodeToString(guessHash[:])
-	return h[len(h)-4:] == "0000"
+// NewTransaction endpoint
+func (api *API) NewTransaction(w http.ResponseWriter, r *http.Request) {
+	json.NewEncoder(w).Encode("Hello World")
 }
 
-func mine(bc *blockchain) response {
-	lastBlock := bc.lastBlock()
-	lastProof := lastBlock.proof
-	proof := proofOfWork(lastProof)
-
-	bc.newTransaction("0", "node", 10)
-
-	previousHash := hash(lastBlock)
-	block := bc.newBlock(proof, previousHash)
-
-	return response{
-		message:      "New Block Forged",
-		index:        block.index,
-		transactions: block.transactions,
-		proof:        block.proof,
-		previousHash: block.previousHash,
-	}
-
+// Chain endpoint
+func (api *API) Chain(w http.ResponseWriter, r *http.Request) {
+	json.NewEncoder(w).Encode("Hello World")
 }
 
 func main() {
+
 	bc := blockchain{
 		chain:               []block{},
 		currentTransactions: []transaction{},
@@ -72,7 +43,26 @@ func main() {
 	mine(&bc)
 	bc.newTransaction("0", "new", 1)
 	mine(&bc)
-	// fmt.Println(len(bc.chain))
 	pretty.Print(bc)
+
+	api := API{
+		bc: &bc,
+	}
+
+	// or error handling
+	u2, err := uuid.NewV4()
+	if err != nil {
+		fmt.Printf("Something went wrong: %s", err)
+		return
+	}
+
+	fmt.Printf("UUIDv4: %s\n", u2)
+	router := mux.NewRouter()
+	router.HandleFunc("/mine", api.Mine).Methods("GET")
+	router.HandleFunc("/transactions/new", api.NewTransaction).Methods("GET")
+	// router.HandleFunc("/people/{id}", CreatePerson).Methods("POST")
+	// router.HandleFunc("/people/{id}", DeletePerson).Methods("DELETE")
+
+	log.Fatal(http.ListenAndServe(":8000", router))
 
 }
